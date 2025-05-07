@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append('/content/DLNLP_25_SN12345678/A')  # Importing functions from Task A
+sys.path.append('/content/DLNLP_25_mbrya27/A')  # Importing functions from Task A
 import emotions_train
 
 # import libraries, data and tools
@@ -36,19 +36,16 @@ def plot_labels(data,title):
 
   return None
 
-def explore_data(data,large_values): # dataset and a label value that need to be downsampled
-  large_values = large_values
-  df = data
-  plot_labels(df,'Original Label Counts')
+def explore_data(data,label): # dataset and a label value that need to be downsampled
   
-
-   # renaming for brevity
-  target_count = 200  # Example target count
+  df = data
+  label = label
+  
+  target_count = 200  # target count for all labels
   #column_to_target = df['labels']
-
   # extracting rows with the overrepresented value (large_value) and the rest
-  large_df = df[df['labels'] == large_values]
-  other_df = df[df['labels'] != large_values]
+  large_df = df[df['labels'] == label]
+  other_df = df[df['labels'] != label]
 
   # downsampling the DataFrame with the overrepresented value
   if len(large_df) > target_count:
@@ -56,22 +53,9 @@ def explore_data(data,large_values): # dataset and a label value that need to be
 
   # concatenating the downsampled data with the rest
   df_balanced = pd.concat([other_df, large_downsampled_df], ignore_index=True)
-
-  print("Original DataFrame shape:", df.shape)
-  print("Balanced DataFrame shape:", df_balanced.shape)
-  print(f"\nValue counts in 'labels' of the balanced DataFrame:") 
-  print(df_balanced['labels'].value_counts())
-  plot_labels(df_balanced,'Updated Label Counts')
+  
   return df_balanced
   
-
-def resize(data):
-  labels_to_downsample = ['offensive_language','neither','hate_speech']
-
-  for label in labels_to_downsample: 
-    data = explore_data(data,label)
-  return data
-
 
 # Add a labels column with the string labels
 # Read in tweet and labels columns
@@ -96,7 +80,21 @@ def read_rearrange(file):
         data.loc[i, 'labels'] = 'neither'
   data = data[["text",'labels']]
 
-  data = resize(data)
+  # Explore, but also downsample all lables in dataset
+  print(f"Original DataFrame shape:", data.shape)
+  plot_labels(data,'Original Label Counts') # View original dataset
+  
+  # choose labels to be downsampled
+  high_count_labels = ['hate_speech','neither',"offensive_language"]
+  
+  for label in high_count_labels:
+    data = explore_data(data,label)
+
+
+  print(f"Updated DataFrame shape:", data.shape)
+  print(f"\nUpdated counts for each label:") 
+  print(data['labels'].value_counts())
+  plot_labels(data,f'Updated Label Counts')
 
   return data
 
@@ -105,13 +103,17 @@ def process_emotions(file_path):
 
   dataset = read_rearrange(file_path)  # READ IN THE CSV FILES AND REMOVE TEXT DUPLICATES
                                        # EXTRACT THE COLUMNS AND EMOTIONS WE WANT
-
+  
   ##############  PLOT GRAPHS FOR ENTIRE DATASET  #############
   title1 = 'Hate Speech Dataset'
   emotions_train.plot_data(dataset,title1)
   #########################################################
+  
 
-  train_data, val_data, test_data = emotions_train.split(dataset)  # SPLIT DATA
+  
+  ### SPLIT DATA
+  train_data, val_data, test_data  = emotions_train.split(dataset) # order of test and val data variables swapped to change split ratios
+  
 
   ##############  PLOT GRAPHS FOR EACH DATASET SPLIT #############
   title2 = 'train'
@@ -121,13 +123,14 @@ def process_emotions(file_path):
   emotions_train.plot_data(val_data,title3)
   emotions_train.plot_data(test_data,title4)
   #########################################################
-
-  ##### CONVERT STRING LABELS INTO INTEGERS #####
+  
+  #### CONVERT STRING LABELS INTO INTEGERS #####
   train_data,unique_labels = emotions_train.label_to_id(train_data)
-  val_data,unique_labels = emotions_train.label_to_id(val_data)
-  test_data,unique_labels = emotions_train.label_to_id(val_data)
+  test_data,_ = emotions_train.label_to_id(test_data)
+  val_data,_ = emotions_train.label_to_id(val_data)
+  
 
-  ###### DEFINE FEATURES #####
+  ###### DEFINE FEATURES #####ss
   class_names = unique_labels.tolist()  # string labels
   label_feature = ClassLabel(names=class_names)
 
@@ -137,13 +140,13 @@ def process_emotions(file_path):
   })
   #### CONVERT PANDAS DATAFRAMES INTO DATASET OBJECTS ###
   train_data = Dataset.from_pandas(train_data[['text', 'labels']], features=features)
-  val_data = Dataset.from_pandas(val_data[['text', 'labels']], features=features)
+  val_data = Dataset.from_pandas(val_data[['text', 'labels']], features=features) 
   test_data = Dataset.from_pandas(test_data[['text', 'labels']], features=features)
 
   ### CONVERT DATASET OBJECTS INTO A DATASETDICT
   dataset = DatasetDict({'train': train_data,
-                              'validation': val_data,
-                              'test': test_data,})
+                         'validation': val_data,
+                         'test': test_data})
 
   #### TOKENIZE DATA AND REMOVE UNTOKENIZED DATA
   dataset = dataset.map(emotions_train.tokenize, batched=True,remove_columns=['text'])
@@ -178,14 +181,28 @@ def main(file_list,num_labels):
   print(f"F1 score: {(f1*100):.2f}",'%')
   
   # Plot a confusability matrix
-  cm = confusion_matrix(all_labels, all_preds)
-  print("confusability matrix",cm)
+  cm = confusion_matrix(all_labels, all_preds,normalize='true')
+  #print("confusability matrix",cm)
 
   class_names = ['hate_speech', 'offensive_language', 'neither']  
 
+  #disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+  #disp.plot(cmap=plt.cm.Blues)
+  #plt.title('Confusion Matrix')
+  #plt.show()
+
   disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
-  disp.plot(cmap=plt.cm.Blues)
-  plt.title('Confusion Matrix')
+
+  
+  fmt = '.2%'  # Format as percentage with 2 decimal places
+
+  disp.plot(cmap=plt.cm.Blues, values_format=fmt)
+  plt.title("Confusion Matrix Precision")
+  plt.xlabel("Predicted Label")
+  plt.ylabel("True Label")
+  plt.xticks(ticks=np.arange(len(class_names)), labels=class_names, rotation=45, ha='right')
+  plt.yticks(ticks=np.arange(len(class_names)), labels=class_names)
+  plt.tight_layout()
   plt.show()
 
   
