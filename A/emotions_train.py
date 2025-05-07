@@ -1,7 +1,4 @@
-### install datasets and torch
-#!pip install datasets
-#!pip install torch
-#!pip install scikit-learn
+
 
 # import libraries, data and tools
 import torch
@@ -14,6 +11,7 @@ from tqdm.auto import tqdm
 from torch.optim import Adam
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
 from sklearn.exceptions import UndefinedMetricWarning
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from transformers import AutoModelForSequenceClassification
@@ -100,18 +98,19 @@ def downsample_label_counts(data):
 
   return data
 
-def split(dataset):
+def split(data):
 
 
-  train_data = dataset.groupby("labels")[["labels","text"]].apply(
+  train_data = data.groupby("labels")[["text","labels"]].apply(
     lambda x: x.sample(frac=0.7, random_state=42)
     ).reset_index(drop=True)
-  test_data = train_data.groupby("labels")[["labels","text"]].apply(
-    lambda x: x.sample(frac=0.5, random_state=42)
+    
+  test_data = data.groupby("labels")[["text","labels"]].apply(
+    lambda x: x.sample(frac=0.15, random_state=42)
     ).reset_index(drop=True)
 
-  val_data = test_data.groupby("labels")[["labels","text"]].apply(
-    lambda x: x.sample(frac=0.5, random_state=42)
+  val_data = data.groupby("labels")[["text","labels"]].apply(
+    lambda x: x.sample(frac=0.15, random_state=42)
     ).reset_index(drop=True)
 
 
@@ -191,7 +190,11 @@ def process_emotions(file_path):
   plot_data(dataset,title1)
   #########################################################
 
-  train_data, val_data, test_data = split(dataset)  # SPLIT DATA
+  ##### CONVERT STRING LABELS INTO INTEGERS #####
+  dataset,unique_labels = label_to_id(dataset)
+  
+  ##### SPLIT DATA
+  train_data, test_data, val_data = split(dataset)  
 
   ##############  PLOT GRAPHS FOR EACH DATASET SPLIT #############
   title2 = 'train'
@@ -202,10 +205,7 @@ def process_emotions(file_path):
   plot_data(test_data,title4)
   #########################################################
 
-  ##### CONVERT STRING LABELS INTO INTEGERS #####
-  train_data,unique_labels = label_to_id(train_data)
-  val_data,unique_labels = label_to_id(val_data)
-  test_data,unique_labels = label_to_id(val_data)
+  
 
   ###### DEFINE FEATURES #####
   class_names = unique_labels.tolist()  # string labels
@@ -417,14 +417,32 @@ def main(file_list,num_labels):
   print(f"F1 score: {(f1*100):.2f}",'%')
   
   # Plot a confusability matrix
-  cm = confusion_matrix(all_labels, all_preds)
+  #cm = confusion_matrix(all_labels, all_preds)
   #print("confusability matrix",cm)
 
   class_names = ['anger', 'fear', 'joy','neutral','sadness']  
 
+  #disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+  #disp.plot(cmap=plt.cm.Blues)
+  #plt.title('Confusion Matrix')
+  #plt.show()
+
+  cm = confusion_matrix(all_labels, all_preds, normalize='pred')  # Or 'pred' or 'all'
+
+  
+
   disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
-  disp.plot(cmap=plt.cm.Blues)
-  plt.title('Confusion Matrix')
+
+  
+  fmt = '.2%'  # Format as percentage with 2 decimal places
+
+  disp.plot(cmap=plt.cm.Blues, values_format=fmt)
+  plt.title("Confusion Matrix Precision")
+  plt.xlabel("Predicted Label")
+  plt.ylabel("True Label")
+  plt.xticks(ticks=np.arange(len(class_names)), labels=class_names, rotation=45, ha='right')
+  plt.yticks(ticks=np.arange(len(class_names)), labels=class_names)
+  plt.tight_layout()
   plt.show()
 
   
