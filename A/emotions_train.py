@@ -190,8 +190,6 @@ def process_emotions(file_path):
   plot_data(dataset,title1)
   #########################################################
 
-  ##### CONVERT STRING LABELS INTO INTEGERS #####
-  dataset,unique_labels = label_to_id(dataset)
   
   ##### SPLIT DATA
   train_data, test_data, val_data = split(dataset)  
@@ -205,7 +203,10 @@ def process_emotions(file_path):
   plot_data(test_data,title4)
   #########################################################
 
-  
+  ##### CONVERT STRING LABELS INTO INTEGERS #####
+  train_data,unique_labels = label_to_id(train_data)
+  val_data,_ = label_to_id(val_data)
+  test_data,_ = label_to_id(test_data)
 
   ###### DEFINE FEATURES #####
   class_names = unique_labels.tolist()  # string labels
